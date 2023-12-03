@@ -1,0 +1,17 @@
+{
+  "name": "luissantiago/sos-google",
+  "config": {
+    "sort-packages": true
+  },
+  "minimum-stability":"stable",
+  "require": {
+    "google/photos-library": "^1.7.0",
+    "google/auth": "^1.16.0"
+  },
+  "authors": [
+    {
+        "name": "Luis Santiago",
+        "homepage": "https://github.com/LuisSantiago"
+    }
+  ]
+}
