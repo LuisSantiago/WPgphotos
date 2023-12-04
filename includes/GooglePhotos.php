@@ -11,6 +11,8 @@ if (!defined('ABSPATH')) {
 class GooglePhotos
 {
     private const GOOGLE_PHOTOS_META_KEY = 'google_photo';
+    private const CUSTOM_POST_TYPE = 'desaparecido';
+
     private ?string $uploadedUrl = null;
     private ?WP_Post $post = null;
 
@@ -18,21 +20,25 @@ class GooglePhotos
     {
         add_action('admin_enqueue_scripts', [$this, 'enqueueScriptsAndStyles']);
         add_action('post_updated', [$this, 'postUpdated'], 15, 3);
-        add_filter('update_post_metadata', [$this, 'wpdocs_update_foo'], 1, 4);
+        add_filter('update_post_metadata', [$this, 'uploadImageWhenMetadataIsUpdated'], 1, 4);
     }
 
-    public function wpdocs_update_foo($check, $object_id, $meta_key, $meta_value)
+    public function uploadImageWhenMetadataIsUpdated($check, $object_id, $meta_key, $meta_value)
     {
         if ($meta_key === '_thumbnail_id' && $this->post) {
+            if ($this->post->post_type != self::CUSTOM_POST_TYPE) {
+                googlePhotosLog("El post es del tipo {$this->post->post_type}, para subir imágenes debe ser del tipo " . self::CUSTOM_POST_TYPE);
+                return $check;
+            };
             $changedImage = wp_get_attachment_image_url($meta_value, 'large');
             $this->uploadedUrl = $changedImage;
             $this->uploadGooglePhotoOnPostUpdated($this->post->ID, null, $this->post, $changedImage);
         }
 
-        return $check; // this means: go on with the normal execution in meta.php
+        return $check;
     }
 
-    public function enqueueScriptsAndStyles($hook)
+    public function enqueueScriptsAndStyles($hook): void
     {
         if (in_array($hook, [
             'toplevel_page_google_photos_options',
@@ -44,10 +50,14 @@ class GooglePhotos
         }
     }
 
-    public function postUpdated($postId, $postAfter, $postBefore)
+    public function postUpdated($postId, $postAfter, $postBefore): void
     {
         if (wp_is_post_revision($postId)) return;
         if (wp_is_post_autosave($postId)) return;
+        if ($postAfter->post_type != self::CUSTOM_POST_TYPE) {
+            googlePhotosLog("El post es del tipo $postAfter->post_type, para subir imágenes debe ser del tipo " . self::CUSTOM_POST_TYPE);
+            return;
+        }
 
         $googlePhotoMeta = get_post_meta($postId, self::GOOGLE_PHOTOS_META_KEY, true);
         if (empty($googlePhotoMeta)) {
@@ -61,7 +71,7 @@ class GooglePhotos
         }
     }
 
-    public function uploadGooglePhotoOnPostUpdated(int $postId, ?array $currentGooglePhoto, WP_Post $post)
+    public function uploadGooglePhotoOnPostUpdated(int $postId, ?array $currentGooglePhoto, WP_Post $post): void
     {
         $mediaUrl = $this->uploadedUrl ?? get_the_post_thumbnail_url($postId, 'large');
         if (!$mediaUrl) {
@@ -104,14 +114,14 @@ class GooglePhotos
             ];
 
             update_post_meta($postId, self::GOOGLE_PHOTOS_META_KEY, $meta);
-            googlePhotosLog("Subida imagen id $uploadedItemId a Google Photos");
+            googlePhotosLog("Subida imagen del post {$post->post_name} a Google Photos");
         } catch (ApiException $e) {
-            googlePhotosLog("Subida imagen id $uploadedItemId a Google Photos");
+            googlePhotosLog("Error subiendo la imagen del post {$post->post_name} a Google Photos");
             googlePhotosLog($e->getMessage(), true);
         }
     }
 
-    public function removeFromGooglePhotoOnPostDeleted(int $postId, ?array $googlePhoto, WP_Post $post)
+    public function removeFromGooglePhotoOnPostDeleted(int $postId, ?array $googlePhoto, WP_Post $post): void
     {
         if (!isset($googlePhoto['id'])) {
             googlePhotosLog("no se obtiene id");
@@ -119,7 +129,7 @@ class GooglePhotos
         }
 
         $googlePhotoId = $googlePhoto['id'];
-        googlePhotosLog('Intenta borrar' . $googlePhotoId . $postId);
+        googlePhotosLog('Intenta borrar la foto del post : ' . $post->post_name);
         if (!$googlePhotoId) {
             return;
         }
@@ -130,8 +140,7 @@ class GooglePhotos
         }
 
         try {
-            googlePhotosLog('Borrar la foto :' . $googlePhotoId);
-
+            googlePhotosLog('Borra la foto del post: ' . $post->post_name);
             $library->batchRemoveMediaItemsFromAlbum([$googlePhotoId], GooglePhotosOptions::getAlbumId());
             delete_post_meta($postId, self::GOOGLE_PHOTOS_META_KEY);
         } catch (ApiException $e) {
@@ -140,4 +149,5 @@ class GooglePhotos
         }
     }
 }
+
 

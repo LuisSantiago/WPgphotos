@@ -1,6 +1,6 @@
 <?php
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
     exit;
 }
 
@@ -12,6 +12,8 @@ class GooglePhotosOptions
     {
         error_reporting(E_ALL);
         add_action('admin_menu', [$this, 'googlePhotosUploaderRegisterOptionsPage']);
+        add_action('admin_init', [$this, 'registerOptions']);
+        add_action("wp_ajax_getAlbumsAjax", [$this, "getAlbumsAjax"]);
     }
 
     public static function hasOptions(): bool
@@ -57,7 +59,7 @@ class GooglePhotosOptions
     public static function isDebugMode(): ?string
     {
         return isset(get_option('google_photos_options')['google_photos_debug'])
-            && (bool) get_option('google_photos_options')['google_photos_debug'];
+            && (bool)get_option('google_photos_options')['google_photos_debug'];
     }
 
     public static function setCredentials(string $code): void
@@ -89,7 +91,7 @@ class GooglePhotosOptions
     }
 
 
-    public function googlePhotosUploaderRegisterOptionsPage()
+    public function googlePhotosUploaderRegisterOptionsPage(): void
     {
         add_menu_page(
             'Configuración de Google Photos',
@@ -123,8 +125,8 @@ class GooglePhotosOptions
 
     public function googlePhotosDebugPageHtml()
     {
-        if(isset($_POST['deleteLogs'])){
-            googlePhotosLog(print_r($_POST,true));
+        if (isset($_POST['deleteLogs'])) {
+            googlePhotosLog(print_r($_POST, true));
             file_put_contents(GOOGLE_PHOTOS_PLUGIN_DIR . 'GPLogs.txt', '');
         }
         echo '<div class="container">
@@ -165,7 +167,7 @@ class GooglePhotosOptions
             while ($query->have_posts()) {
                 $query->the_post();
                 $post_id = get_the_ID();
-                $googlePhoto = get_post_meta($post_id, 'google_photo',true);
+                $googlePhoto = get_post_meta($post_id, 'google_photo', true);
                 $albumMedia[$post_id] = [
                     'googleLink' => isset($googlePhoto['url']) ? $googlePhoto['url'] : '',
                     'title' => get_the_title(),
@@ -190,7 +192,7 @@ class GooglePhotosOptions
 
     }
 
-    public function googlePhotosOptionsPageHtml()
+    public function googlePhotosOptionsPageHtml(): void
     {
         if (!current_user_can('manage_options')) {
             return;
@@ -260,73 +262,74 @@ class GooglePhotosOptions
     </article>
      </div>";
     }
+
+    public function getAlbumsAjax(): void
+    {
+        echo json_encode(GooglePhotosWrapper::getAlbums(), true);
+        wp_die(); // ajax call must die to avoid trailing 0 in your response
+    }
+
+    public function registerOptions(): void
+    {
+        register_setting('google_photos_options_group', 'google_photos_options');
+
+        add_settings_section(
+            'google_photos_options_sections',
+            false,
+            false,
+            'google_photos_options'
+        );
+
+        add_settings_field(
+            'google_photos_client_id',
+            'Id de cliente',
+            function () {
+                $value = GooglePhotosOptions::getClientId();
+                echo "<input type='text' name='google_photos_options[google_photos_client_id]' placeholder='Id de cliente' value='$value'required>";
+            },
+            'google_photos_options',
+            'google_photos_options_sections',
+        );
+
+        add_settings_field(
+            'google_photos_client_secret',
+            'Secreto de cliente',
+            function () {
+                $value = GooglePhotosOptions::getClientSecret();
+                echo "<input type='text' name='google_photos_options[google_photos_client_secret]' placeholder='Secreto de cliente' required value='$value'>";
+            },
+            'google_photos_options',
+            'google_photos_options_sections',
+        );
+
+        if (GooglePhotosOptions::getConnected()) {
+            add_settings_field(
+                'google_photos_album_id',
+                'Álbum donde subir las fotos',
+                function () {
+                    echo "<fieldset style='grid' id='albumsSelector'>";
+                    $value = GooglePhotosOptions::getAlbumId();
+                    echo "<input type='text' id='googleAlbum' name='google_photos_options[google_photos_album_id]' value='$value'>";
+                    echo '<a href="#" class="custom_button" id="getAlbums">Obtener albums de Google Photos</a>';
+                    echo "</fieldset>";
+                },
+                'google_photos_options',
+                'google_photos_options_sections',
+            );
+        }
+
+        add_settings_field(
+            'google_photos_debug',
+            'Modo depuración',
+            function () {
+                $value = GooglePhotosOptions::isDebugMode() ? 'checked' : '';
+                echo "<input type='checkbox' name='google_photos_options[google_photos_debug]' $value>";
+            },
+            'google_photos_options',
+            'google_photos_options_sections',
+        );
+    }
 }
 
-add_action('admin_init', 'registerOptions');
 
-function registerOptions(): void
-{
-    register_setting('google_photos_options_group', 'google_photos_options');
 
-    add_settings_section(
-        'google_photos_options_sections',
-        false,
-        false,
-        'google_photos_options'
-    );
-
-    add_settings_field(
-        'google_photos_client_id',
-        'Id de cliente',
-        function () {
-            $value = GooglePhotosOptions::getClientId();
-            echo "<input type='text' name='google_photos_options[google_photos_client_id]' placeholder='Id de cliente' value='$value'required>";
-        },
-        'google_photos_options',
-        'google_photos_options_sections',
-    );
-
-    add_settings_field(
-        'google_photos_client_secret',
-        'Secreto de cliente',
-        function () {
-            $value = GooglePhotosOptions::getClientSecret();
-            echo "<input type='text' name='google_photos_options[google_photos_client_secret]' placeholder='Secreto de cliente' required value='$value'>";
-        },
-        'google_photos_options',
-        'google_photos_options_sections',
-    );
-
-    add_settings_field(
-        'google_photos_album_id',
-        'Álbum donde subir las fotos',
-        function () {
-            echo "<fieldset style='grid' id='albumsSelector'>";
-            $value = GooglePhotosOptions::getAlbumId();
-            echo "<input type='text' id='googleAlbum' name='google_photos_options[google_photos_album_id]' value='$value'>";
-            echo '<a href="#" class="custom_button" id="getPhotos">Obtener albums de Google Photos</a>';
-            echo "</fieldset>";
-        },
-        'google_photos_options',
-        'google_photos_options_sections',
-    );
-
-    add_settings_field(
-        'google_photos_debug',
-        'Modo depuración',
-        function () {
-            $value = GooglePhotosOptions::isDebugMode() ? 'checked' : '';
-            echo "<input type='checkbox' name='google_photos_options[google_photos_debug]' $value>";
-        },
-        'google_photos_options',
-        'google_photos_options_sections',
-    );
-}
-
-add_action("wp_ajax_getAlbumsAjax", "getAlbumsAjax");
-
-function getAlbumsAjax()
-{
-    echo json_encode(GooglePhotosWrapper::getAlbums(), true);
-    wp_die(); // ajax call must die to avoid trailing 0 in your response
-}

@@ -7,7 +7,7 @@ use Google\Photos\Library\V1\PhotosLibraryResourceFactory;
 use Google\Photos\Types\Album;
 use Psr\Http\Message\UriInterface;
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
     exit;
 }
 
@@ -15,7 +15,6 @@ require_once GOOGLE_PHOTOS_PLUGIN_DIR . 'vendor/autoload.php';
 
 class GooglePhotosWrapper
 {
-
     public static function getOAuth(): ?OAuth2
     {
         if (!GooglePhotosOptions::hasOptions()) {
@@ -53,7 +52,7 @@ class GooglePhotosWrapper
         return $albums;
     }
 
-    public static function createAlbum(string $albumName):void
+    public static function createAlbum(string $albumName): void
     {
         $googlePhotosAlbum = PhotosLibraryResourceFactory::album($albumName);
         self::getPhotosLibrary()->createAlbum($googlePhotosAlbum);
